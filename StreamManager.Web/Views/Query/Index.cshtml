@@ -1,0 +1,338 @@
+@{
+    ViewData["Title"] = "Ad-Hoc Query Tool";
+}
+
+<div class="row">
+    <div class="col-md-12">
+        <h2>Ad-Hoc Query Tool</h2>
+        <p>Execute real-time KSQL queries and see streaming results.</p>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Query Editor</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="queryInput" class="form-label">KSQL Query</label>
+                    <textarea id="queryInput" class="form-control" rows="6" placeholder="SELECT * FROM your_stream EMIT CHANGES;"></textarea>
+                </div>
+                <div class="mb-3">
+                    <button id="runQueryBtn" class="btn btn-success me-2">
+                        <i class="bi bi-play-fill"></i> Run Query
+                    </button>
+                    <button id="stopQueryBtn" class="btn btn-danger" disabled>
+                        <i class="bi bi-stop-fill"></i> Stop Stream
+                    </button>
+                </div>
+                <div id="connectionStatus" class="mb-3">
+                    <span class="badge bg-secondary">Disconnected</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0">Results</h5>
+                <button id="clearResultsBtn" class="btn btn-sm btn-outline-secondary">Clear</button>
+            </div>
+            <div class="card-body p-0">
+                <div id="resultsContainer" style="max-height: 500px; overflow-y: auto;">
+                    <table id="resultsTable" class="table table-striped table-hover mb-0" style="display: none; font-size: 0.9em;">
+                        <thead id="resultsHeader" class="table-dark sticky-top">
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                    <div id="emptyMessage" class="p-4 text-center text-muted">
+                        No results yet. Run a query to see streaming data.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let connection = null;
+        let querySubscription = null;
+        let isRunning = false;
+        let rowCount = 0;
+        const maxRows = 1000;
+        
+        // Store current column information for data formatting
+        window.currentColumns = null;
+
+        // Initialize CodeMirror
+        const editor = CodeMirror.fromTextArea(document.getElementById('queryInput'), {
+            mode: 'text/x-sql',
+            theme: 'monokai',
+            lineNumbers: true,
+            height: 'auto'
+        });
+
+        // Initialize SignalR connection
+        function initConnection() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("https://localhost:7068/hub/ksql")
+                .build();
+
+            connection.start()
+                .then(function () {
+                    updateConnectionStatus(true);
+                })
+                .catch(function (err) {
+                    console.error(err.toString());
+                    updateConnectionStatus(false);
+                });
+
+            connection.onclose(async () => {
+                updateConnectionStatus(false);
+            });
+        }
+
+        function updateConnectionStatus(connected) {
+            const badge = document.getElementById('connectionStatus').querySelector('.badge');
+            if (connected) {
+                badge.className = 'badge bg-success';
+                badge.textContent = 'Connected';
+            } else {
+                badge.className = 'badge bg-danger';
+                badge.textContent = 'Disconnected';
+            }
+        }
+
+        // Query execution
+        document.getElementById('runQueryBtn').addEventListener('click', async function() {
+            console.log('Run query button clicked, isRunning:', isRunning);
+            
+            if (isRunning) {
+                console.log('Query already running, ignoring click');
+                return;
+            }
+
+            const query = editor.getValue().trim();
+            if (!query) {
+                alert('Please enter a KSQL query');
+                return;
+            }
+
+            if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
+                alert('Not connected to server');
+                return;
+            }
+
+            try {
+                console.log('Starting query:', query);
+                setRunning(true);
+                clearResults();
+                
+                // Clean up any existing subscription
+                if (querySubscription) {
+                    querySubscription.dispose();
+                    querySubscription = null;
+                }
+                
+                const queryStream = connection.stream("ExecuteAdHoc", query);
+                console.log('Created query stream:', queryStream);
+                
+                querySubscription = queryStream.subscribe({
+                    next: function(result) {
+                        console.log('Received result:', result.length > 100 ? result.substring(0, 100) + '...' : result);
+                        processResult(result);
+                    },
+                    complete: function() {
+                        console.log('Query stream completed');
+                        setRunning(false);
+                        querySubscription = null;
+                    },
+                    error: function(err) {
+                        console.error('Query stream error:', err);
+                        setRunning(false);
+                        querySubscription = null;
+                        alert('Query error: ' + err);
+                    }
+                });
+                
+                console.log('Query stream subscribed successfully');
+            } catch (err) {
+                console.error('Error starting query:', err);
+                setRunning(false);
+                alert('Error: ' + err.message);
+            }
+        });
+
+        document.getElementById('stopQueryBtn').addEventListener('click', function() {
+            stopQuery();
+        });
+
+        document.getElementById('clearResultsBtn').addEventListener('click', function() {
+            clearResults();
+        });
+
+        function setRunning(running) {
+            console.log('setRunning called with:', running);
+            isRunning = running;
+            document.getElementById('runQueryBtn').disabled = running;
+            document.getElementById('stopQueryBtn').disabled = !running;
+            console.log('Button states - Run disabled:', running, 'Stop disabled:', !running);
+        }
+
+        function stopQuery() {
+            console.log('Stopping query...');
+            
+            if (querySubscription) {
+                try {
+                    console.log('Disposing query subscription...');
+                    querySubscription.dispose();
+                    querySubscription = null;
+                    console.log('Query subscription disposed');
+                } catch (err) {
+                    console.error('Error disposing query subscription:', err);
+                }
+            }
+            
+            setRunning(false);
+            console.log('Query stopped, UI updated');
+        }
+
+        function clearResults() {
+            rowCount = 0;
+            window.currentColumns = null;
+            document.getElementById('resultsHeader').innerHTML = '';
+            document.getElementById('resultsBody').innerHTML = '';
+            document.getElementById('resultsTable').style.display = 'none';
+            document.getElementById('emptyMessage').style.display = 'block';
+        }
+
+        function processResult(result) {
+            console.log('=== processResult called ===');
+            console.log('Raw result:', result);
+            try {
+                const data = JSON.parse(result);
+                
+                if (data.header) {
+                    console.log('Found header data:', data.header);
+                    
+                    // Initialize table headers - handle ksqlDB schema format
+                    let columnInfo = [];
+                    if (typeof data.header.schema === 'string') {
+                        console.log('Full schema string:', data.header.schema);
+                        
+                        // Parse ksqlDB schema: "`COL1` TYPE, `COL2` TYPE(params), ..."
+                        // More robust parsing - split by comma and backtick pattern
+                        const parts = data.header.schema.split(/,\s*(?=`)/);
+                        
+                        for (let i = 0; i < parts.length; i++) {
+                            const part = parts[i].trim();
+                            console.log(`Processing part ${i}: "${part}"`);
+                            
+                            // Match: `COLUMN_NAME` TYPE or `COLUMN_NAME` TYPE(params)
+                            const columnMatch = part.match(/`([^`]+)`\s+(.+)/);
+                            if (columnMatch) {
+                                const columnName = columnMatch[1];
+                                const dataType = columnMatch[2].trim();
+                                columnInfo.push({
+                                    name: columnName,
+                                    type: dataType
+                                });
+                                console.log(`Found column: "${columnName}" type: "${dataType}"`);
+                            } else {
+                                console.log('No match found for part:', part);
+                            }
+                        }
+                    }
+                    
+                    console.log('Final column info:', columnInfo);
+                    
+                    if (columnInfo.length > 0) {
+                        const headerRow = columnInfo.map(col => 
+                            `<th style="text-align: left; vertical-align: top; padding: 8px;">
+                                <div style="font-weight: bold; margin-bottom: 2px;">${col.name}</div>
+                                <div style="font-size: 0.8em; color: #666; font-weight: normal;">(${col.type})</div>
+                            </th>`
+                        ).join('');
+                        document.getElementById('resultsHeader').innerHTML = headerRow;
+                        document.getElementById('resultsTable').style.display = 'table';
+                        document.getElementById('emptyMessage').style.display = 'none';
+                        
+                        // Store column info for data processing
+                        window.currentColumns = columnInfo;
+                        console.log('Stored column info:', window.currentColumns);
+                    }
+                } else if (data.row && data.row.columns) {
+                    // Add data row
+                    if (rowCount >= maxRows) {
+                        // Remove oldest row
+                        const tbody = document.getElementById('resultsBody');
+                        if (tbody.firstElementChild) {
+                            tbody.removeChild(tbody.firstElementChild);
+                        }
+                        rowCount--;
+                    }
+
+                    // Format columns based on type
+                    const formattedColumns = data.row.columns.map((col, index) => {
+                        if (col === null || col === undefined) return '';
+                        
+                        // Debug: log column info
+                        console.log(`Column ${index}: value="${col}", info:`, window.currentColumns ? window.currentColumns[index] : 'no info');
+                        
+                        // Check if we have column info and if this column is ORDER_TIME
+                        if (window.currentColumns && window.currentColumns[index]) {
+                            const columnName = window.currentColumns[index].name;
+                            const columnType = window.currentColumns[index].type;
+                            
+                            // Format ORDER_TIME as localized datetime
+                            if (columnName === 'ORDER_TIME' && columnType === 'BIGINT') {
+                                try {
+                                    const timestamp = parseInt(col);
+                                    // ksqlDB timestamps are in milliseconds
+                                    const date = new Date(timestamp);
+                                    
+                                    console.log(`Converting timestamp: ${timestamp} -> ${date.toLocaleString()}`);
+                                    
+                                    // Check if the date is reasonable (after 1970 and before 2050)
+                                    if (date.getFullYear() > 1970 && date.getFullYear() < 2050) {
+                                        return date.toLocaleString();
+                                    } else {
+                                        // If unreasonable, show original timestamp with note
+                                        return `${col} (timestamp)`;
+                                    }
+                                } catch (e) {
+                                    console.error('Error converting timestamp:', e);
+                                    return col; // Fallback to original value
+                                }
+                            }
+                        }
+                        
+                        return col;
+                    });
+
+                    const row = formattedColumns.map(col => `<td style="padding: 8px; border-bottom: 1px solid #ddd;">${col}</td>`).join('');
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = row;
+                    document.getElementById('resultsBody').appendChild(tr);
+                    rowCount++;
+
+                    // Scroll to bottom
+                    const container = document.getElementById('resultsContainer');
+                    container.scrollTop = container.scrollHeight;
+                }
+            } catch (err) {
+                console.error('Error processing result:', err);
+            }
+        }
+
+        // Initialize on page load
+        initConnection();
+    </script>
+}

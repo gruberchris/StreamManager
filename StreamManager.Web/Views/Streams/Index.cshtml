@@ -1,0 +1,118 @@
+@model List<StreamDefinitionViewModel>
+@{
+    ViewData["Title"] = "Stream Management";
+}
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Stream Management</h2>
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> New Stream
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        @if (!Model.Any())
+        {
+            <div class="alert alert-info">
+                <h5>No streams found</h5>
+                <p>Get started by creating your first stream.</p>
+                <a asp-action="Create" class="btn btn-primary">Create Stream</a>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Query ID</th>
+                            <th>Output Topic</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var stream in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@stream.Name</strong>
+                                    <br>
+                                    <small class="text-muted">@stream.KsqlScript.Substring(0, Math.Min(100, stream.KsqlScript.Length))@(stream.KsqlScript.Length > 100 ? "..." : "")</small>
+                                </td>
+                                <td>
+                                    @if (stream.IsActive)
+                                    {
+                                        <span class="badge bg-success">Running</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Stopped</span>
+                                    }
+                                </td>
+                                <td>
+                                    <small>@(stream.KsqlQueryId ?? "N/A")</small>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(stream.OutputTopic))
+                                    {
+                                        <span>@stream.OutputTopic</span>
+                                        @if (stream.IsActive)
+                                        {
+                                            <br>
+                                            <a asp-controller="Stream" asp-action="Preview" asp-route-id="@stream.Id" class="btn btn-sm btn-outline-info mt-1">
+                                                <i class="bi bi-eye"></i> Preview
+                                            </a>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">N/A</span>
+                                    }
+                                </td>
+                                <td>
+                                    <small>@stream.CreatedAt.ToString("yyyy-MM-dd HH:mm")</small>
+                                </td>
+                                <td class="text-nowrap">
+                                    <div class="btn-group" role="group">
+                                        @if (stream.IsActive)
+                                        {
+                                            <form asp-action="Stop" method="post" class="d-inline">
+                                                <input type="hidden" name="id" value="@stream.Id" />
+                                                <button type="submit" class="btn btn-warning me-1" onclick="return confirm('Stop this stream?')" title="Stop Stream">
+                                                    <i class="bi bi-stop-fill"></i> Stop
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form asp-action="Deploy" method="post" class="d-inline">
+                                                <input type="hidden" name="id" value="@stream.Id" />
+                                                <button type="submit" class="btn btn-success me-1" onclick="return confirm('Deploy this stream?')" title="Deploy Stream">
+                                                    <i class="bi bi-play-fill"></i> Deploy
+                                                </button>
+                                            </form>
+                                        }
+                                        <form asp-action="Delete" method="post" class="d-inline">
+                                            <input type="hidden" name="id" value="@stream.Id" />
+                                            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this stream permanently?')" title="Delete Stream">
+                                                <i class="bi bi-trash"></i> Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,291 @@
+@model StreamDefinitionViewModel
+@{
+    ViewData["Title"] = $"Preview: {Model.Name}";
+}
+
+<div class="row">
+    <div class="col-md-12">
+        <h2>Stream Preview: @Model.Name</h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a asp-controller="Streams" asp-action="Index">Streams</a></li>
+                <li class="breadcrumb-item active">@Model.Name</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Stream Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Status:</strong>
+                        @if (Model.IsActive)
+                        {
+                            <span class="badge bg-success ms-2">Running</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary ms-2">Stopped</span>
+                        }
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Query ID:</strong> @(Model.KsqlQueryId ?? "N/A")
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Output Topic:</strong> @(Model.OutputTopic ?? "N/A")
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Created:</strong> @Model.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <strong>Query:</strong>
+                        <pre class="mt-1 p-2 bg-light border rounded" style="font-size: 12px;">@Model.KsqlScript</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.IsActive && !string.IsNullOrEmpty(Model.OutputTopic))
+{
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Live Data Preview</h5>
+                    <div>
+                        <button id="startPreviewBtn" class="btn btn-success btn-sm">
+                            <i class="bi bi-play-fill"></i> Start Preview
+                        </button>
+                        <button id="stopPreviewBtn" class="btn btn-danger btn-sm" disabled>
+                            <i class="bi bi-stop-fill"></i> Stop Preview
+                        </button>
+                        <button id="clearPreviewBtn" class="btn btn-outline-secondary btn-sm">Clear</button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="connectionStatus" class="p-2 border-bottom">
+                        <span class="badge bg-secondary">Disconnected</span>
+                    </div>
+                    <div id="previewContainer" style="max-height: 500px; overflow-y: auto;">
+                        <div id="emptyPreview" class="p-4 text-center text-muted">
+                            Click "Start Preview" to see live data from this stream.
+                        </div>
+                        <pre id="previewContent" class="p-3 mb-0" style="display: none; font-size: 12px; background: #f8f9fa;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else if (!Model.IsActive)
+{
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="alert alert-warning">
+                <h5>Stream Not Active</h5>
+                <p>This stream is not currently running. Deploy it from the <a asp-controller="Streams" asp-action="Index">Streams page</a> to start generating data.</p>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        console.log('=== PREVIEW PAGE LOADED ===');
+        console.log('Stream query from server:', '@Html.Raw(Model.KsqlScript)');
+        
+        let connection = null;
+        let isPreviewActive = false;
+        let querySubscription = null;
+        const streamQuery = '@Html.Raw(Model.KsqlScript)';
+        let messageCount = 0;
+        const maxMessages = 100;
+
+        // Initialize SignalR connection
+        function initConnection() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("https://localhost:7068/hub/ksql")
+                .build();
+
+            connection.start()
+                .then(function () {
+                    updateConnectionStatus(true);
+                })
+                .catch(function (err) {
+                    console.error(err.toString());
+                    updateConnectionStatus(false);
+                });
+
+            connection.onclose(async () => {
+                updateConnectionStatus(false);
+                setPreviewActive(false);
+            });
+
+            // Set up handler for Kafka messages from TopicProxyService
+            connection.on('ReceiveMessage', function (message) {
+                if (isPreviewActive && message && message.trim()) {
+                    console.log('Received Kafka message:', message);
+                    addPreviewMessage(message);
+                }
+            });
+        }
+
+        function updateConnectionStatus(connected) {
+            const badge = document.getElementById('connectionStatus').querySelector('.badge');
+            if (connected) {
+                badge.className = 'badge bg-success';
+                badge.textContent = 'Connected';
+            } else {
+                badge.className = 'badge bg-danger';
+                badge.textContent = 'Disconnected';
+            }
+        }
+
+        function setPreviewActive(active) {
+            isPreviewActive = active;
+            document.getElementById('startPreviewBtn').disabled = active;
+            document.getElementById('stopPreviewBtn').disabled = !active;
+        }
+
+        function addPreviewMessage(message) {
+            const previewContent = document.getElementById('previewContent');
+            const emptyPreview = document.getElementById('emptyPreview');
+            
+            // Show content area, hide empty message
+            previewContent.style.display = 'block';
+            emptyPreview.style.display = 'none';
+
+            // Limit number of messages
+            if (messageCount >= maxMessages) {
+                const lines = previewContent.textContent.split('\n');
+                lines.shift(); // Remove first line
+                previewContent.textContent = lines.join('\n');
+                messageCount--;
+            }
+
+            // Format the JSON message nicely - one object per line
+            try {
+                const data = JSON.parse(message);
+                let formattedMessage;
+                const timestamp = new Date().toLocaleString();
+                
+                if (data.header) {
+                    // Show header info compactly
+                    formattedMessage = `[${timestamp}] HEADER: ${JSON.stringify(data.header)}\n`;
+                } else if (data.row && data.row.columns) {
+                    // Convert row data to a readable object format
+                    const rowObject = {
+                        timestamp: timestamp,
+                        data: data.row.columns
+                    };
+                    formattedMessage = `${JSON.stringify(rowObject)}\n`;
+                } else {
+                    // Generic JSON object
+                    const messageObject = {
+                        timestamp: timestamp,
+                        message: data
+                    };
+                    formattedMessage = `${JSON.stringify(messageObject)}\n`;
+                }
+                
+                previewContent.textContent += formattedMessage;
+            } catch (e) {
+                // If not JSON, add as-is with timestamp
+                const timestamp = new Date().toLocaleString();
+                const messageObject = {
+                    timestamp: timestamp,
+                    raw: message
+                };
+                previewContent.textContent += `${JSON.stringify(messageObject)}\n`;
+            }
+            
+            messageCount++;
+
+            // Scroll to bottom
+            const container = document.getElementById('previewContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Event handlers
+        document.getElementById('startPreviewBtn').addEventListener('click', async function() {
+            if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
+                alert('Not connected to server');
+                return;
+            }
+
+            try {
+                console.log('Starting preview for stream ID:', '@Model.Id');
+                
+                // Clean up any existing subscription
+                if (querySubscription) {
+                    querySubscription.dispose();
+                    querySubscription = null;
+                }
+                
+                // Use ViewStream with the stream ID instead of ExecuteAdHoc
+                const queryStream = connection.stream("ViewStream", '@Model.Id');
+                
+                querySubscription = queryStream.subscribe({
+                    next: function(result) {
+                        // Ignore empty keepalive messages from ViewStream, real data comes via ReceiveMessage
+                        if (result && result.trim()) {
+                            console.log('Preview received result:', result.length > 100 ? result.substring(0, 100) + '...' : result);
+                        }
+                    },
+                    complete: function() {
+                        console.log('Preview stream completed');
+                        setPreviewActive(false);
+                        querySubscription = null;
+                    },
+                    error: function(err) {
+                        console.error('Preview stream error:', err);
+                        setPreviewActive(false);
+                        querySubscription = null;
+                        alert('Preview error: ' + err);
+                    }
+                });
+                
+                setPreviewActive(true);
+            } catch (err) {
+                console.error('Error starting preview:', err);
+                alert('Error starting preview: ' + err.message);
+            }
+        });
+
+        document.getElementById('stopPreviewBtn').addEventListener('click', async function() {
+            try {
+                if (querySubscription) {
+                    console.log('Stopping preview...');
+                    querySubscription.dispose();
+                    querySubscription = null;
+                }
+                setPreviewActive(false);
+            } catch (err) {
+                console.error('Error stopping preview:', err);
+            }
+        });
+
+        document.getElementById('clearPreviewBtn').addEventListener('click', function() {
+            messageCount = 0;
+            document.getElementById('previewContent').textContent = '';
+            document.getElementById('previewContent').style.display = 'none';
+            document.getElementById('emptyPreview').style.display = 'block';
+        });
+
+        // Initialize on page load
+        @if (Model.IsActive && !string.IsNullOrEmpty(Model.OutputTopic))
+        {
+            <text>initConnection();</text>
+        }
+    </script>
+}

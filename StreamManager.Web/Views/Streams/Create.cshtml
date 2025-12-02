@@ -1,0 +1,93 @@
+@model CreateStreamViewModel
+@{
+    ViewData["Title"] = "Create Stream";
+}
+
+<div class="row">
+    <div class="col-md-12">
+        <h2>Create New Stream</h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a asp-action="Index">Streams</a></li>
+                <li class="breadcrumb-item active">Create</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-8">
+        <form asp-action="Create" method="post">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Stream Definition</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label asp-for="Name" class="form-label">Stream Name</label>
+                        <input asp-for="Name" class="form-control" placeholder="Enter a descriptive name for your stream" />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                        <div class="form-text">A friendly name to identify this stream (e.g., "HighValueOrders", "FraudDetection")</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="KsqlScript" class="form-label">KSQL Query</label>
+                        <textarea asp-for="KsqlScript" class="form-control" rows="8" placeholder="SELECT * FROM source_stream WHERE condition = 'value'"></textarea>
+                        <span asp-validation-for="KsqlScript" class="text-danger"></span>
+                        <div class="form-text">
+                            Enter your SELECT statement. The CREATE STREAM wrapper will be added automatically when deployed.
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Create Stream</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Tips</h6>
+            </div>
+            <div class="card-body">
+                <ul class="small">
+                    <li><strong>Stream Name:</strong> Use a descriptive name that indicates the purpose of your stream</li>
+                    <li><strong>KSQL Query:</strong> Write a SELECT statement that transforms or filters your source data</li>
+                    <li><strong>Testing:</strong> Use the Query Tool to test your KSQL before creating a persistent stream</li>
+                    <li><strong>Deployment:</strong> After creation, you'll need to deploy the stream to start processing</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">Example</h6>
+            </div>
+            <div class="card-body">
+                <code style="font-size: 12px;">
+                    SELECT<br>
+                    &nbsp;&nbsp;orderId,<br>
+                    &nbsp;&nbsp;customerId,<br>
+                    &nbsp;&nbsp;amount<br>
+                    FROM orders<br>
+                    WHERE amount > 1000
+                </code>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Initialize CodeMirror for the KSQL editor
+        const editor = CodeMirror.fromTextArea(document.querySelector('textarea[name="KsqlScript"]'), {
+            mode: 'text/x-sql',
+            theme: 'monokai',
+            lineNumbers: true,
+            height: 'auto'
+        });
+    </script>
+}
