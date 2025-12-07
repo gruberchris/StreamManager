@@ -45,7 +45,7 @@
                                 <td>
                                     <strong>@stream.Name</strong>
                                     <br>
-                                    <small class="text-muted">@stream.KsqlScript.Substring(0, Math.Min(100, stream.KsqlScript.Length))@(stream.KsqlScript.Length > 100 ? "..." : "")</small>
+                                    <small class="text-muted">@stream.SqlScript.Substring(0, Math.Min(100, stream.SqlScript.Length))@(stream.SqlScript.Length > 100 ? "..." : "")</small>
                                 </td>
                                 <td>
                                     @if (stream.IsActive)
@@ -58,7 +58,7 @@
                                     }
                                 </td>
                                 <td>
-                                    <small>@(stream.KsqlQueryId ?? "N/A")</small>
+                                    <small>@(stream.QueryId ?? "N/A")</small>
                                 </td>
                                 <td>
                                     @if (!string.IsNullOrEmpty(stream.OutputTopic))

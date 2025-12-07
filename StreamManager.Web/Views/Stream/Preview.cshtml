@@ -35,7 +35,7 @@
                         }
                     </div>
                     <div class="col-md-3">
-                        <strong>Query ID:</strong> @(Model.KsqlQueryId ?? "N/A")
+                        <strong>Query ID:</strong> @(Model.QueryId ?? "N/A")
                     </div>
                     <div class="col-md-3">
                         <strong>Output Topic:</strong> @(Model.OutputTopic ?? "N/A")
@@ -47,7 +47,7 @@
                 <div class="row mt-2">
                     <div class="col-md-12">
                         <strong>Query:</strong>
-                        <pre class="mt-1 p-2 bg-light border rounded" style="font-size: 12px;">@Model.KsqlScript</pre>
+                        <pre class="mt-1 p-2 bg-light border rounded" style="font-size: 12px;">@Model.SqlScript</pre>
                     </div>
                 </div>
             </div>
@@ -102,19 +102,19 @@ else if (!Model.IsActive)
 @section Scripts {
     <script>
         console.log('=== PREVIEW PAGE LOADED ===');
-        console.log('Stream query from server:', '@Html.Raw(Model.KsqlScript)');
+        console.log('Stream query from server:', '@Html.Raw(Model.SqlScript)');
         
         let connection = null;
         let isPreviewActive = false;
         let querySubscription = null;
-        const streamQuery = '@Html.Raw(Model.KsqlScript)';
+        const streamQuery = '@Html.Raw(Model.SqlScript)';
         let messageCount = 0;
         const maxMessages = 100;
 
         // Initialize SignalR connection
         function initConnection() {
             connection = new signalR.HubConnectionBuilder()
-                .withUrl("https://localhost:7068/hub/ksql")
+                .withUrl("https://localhost:7068/hub/stream")
                 .build();
 
             connection.start()

@@ -31,9 +31,9 @@
                     </div>
 
                     <div class="mb-3">
-                        <label asp-for="KsqlScript" class="form-label">KSQL Query</label>
-                        <textarea asp-for="KsqlScript" class="form-control" rows="8" placeholder="SELECT * FROM source_stream WHERE condition = 'value'"></textarea>
-                        <span asp-validation-for="KsqlScript" class="text-danger"></span>
+                        <label asp-for="SqlScript" class="form-label">SQL Query</label>
+                        <textarea asp-for="SqlScript" class="form-control" rows="8" placeholder="SELECT * FROM source_stream WHERE condition = 'value'"></textarea>
+                        <span asp-validation-for="SqlScript" class="text-danger"></span>
                         <div class="form-text">
                             Enter your SELECT statement. The CREATE STREAM wrapper will be added automatically when deployed.
                         </div>
@@ -83,7 +83,7 @@
 @section Scripts {
     <script>
         // Initialize CodeMirror for the KSQL editor
-        const editor = CodeMirror.fromTextArea(document.querySelector('textarea[name="KsqlScript"]'), {
+        const editor = CodeMirror.fromTextArea(document.querySelector('textarea[name="SqlScript"]'), {
             mode: 'text/x-sql',
             theme: 'monokai',
             lineNumbers: true,

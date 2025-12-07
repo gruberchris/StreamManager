@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using StreamManager.Api.Configuration;
 using StreamManager.Api.Data;
 using StreamManager.Api.Services;
+using StreamManager.Api.Services.Engines;
+using StreamManager.Api.Services.Validators;
 using StreamManager.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +11,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Bind configuration
 builder.Services.Configure<ResourceLimitsOptions>(
     builder.Configuration.GetSection(ResourceLimitsOptions.SectionName));
+
+// Bind and register stream engine configuration
+var engineOptions = builder.Configuration
+    .GetSection(StreamEngineOptions.SectionName)
+    .Get<StreamEngineOptions>() ?? new StreamEngineOptions();
+
+builder.Services.AddSingleton(engineOptions);
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -35,16 +44,31 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<StreamManagerDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// Configure HttpClient for ksqlDB
-builder.Services.AddHttpClient<AdHocKsqlService>(client =>
+// Configure HttpClient and register stream query engine and validator based on provider
+if (engineOptions.Provider == StreamEngineProvider.KsqlDb)
 {
-    client.DefaultRequestVersion = new Version(2, 0);
-    client.Timeout = TimeSpan.FromMinutes(30); // Long timeout for streaming
-});
+    builder.Services.AddHttpClient<IStreamQueryEngine, KsqlDbEngine>(client =>
+    {
+        client.DefaultRequestVersion = new Version(2, 0);
+        client.Timeout = TimeSpan.FromMinutes(30);
+    });
+    builder.Services.AddSingleton<IQueryValidator, KsqlDbQueryValidator>();
+}
+else if (engineOptions.Provider == StreamEngineProvider.Flink)
+{
+    builder.Services.AddHttpClient<IStreamQueryEngine, FlinkEngine>(client =>
+    {
+        client.DefaultRequestVersion = new Version(2, 0);
+        client.Timeout = TimeSpan.FromMinutes(30);
+    });
+    builder.Services.AddSingleton<IQueryValidator, FlinkQueryValidator>();
+}
+else
+{
+    throw new InvalidOperationException($"Unknown stream engine provider: {engineOptions.Provider}");
+}
 
 // Register custom services
-builder.Services.AddScoped<AdHocKsqlService>();
-builder.Services.AddSingleton<KsqlQueryValidator>();
 builder.Services.AddSingleton<QueryRateLimiter>();
 builder.Services.AddHostedService<TopicProxyService>();
 
@@ -78,6 +102,6 @@ app.UseCors("AllowWebApp");
 app.UseRouting();
 
 app.MapControllers();
-app.MapHub<KsqlHub>("/hub/ksql");
+app.MapHub<StreamHub>("/hub/stream");
 
 app.Run();

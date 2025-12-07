@@ -1,0 +1,67 @@
+version: '3.8'
+
+# Apache Flink-specific services
+# Run with: docker-compose -f docker-compose.base.yml -f docker-compose.flink.yml up
+services:
+  flink-jobmanager:
+    image: flink:1.18-scala_2.12-java11
+    hostname: flink-jobmanager
+    container_name: flink-jobmanager
+    ports:
+      - "8081:8081"  # Flink Web UI and REST API
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        execution.checkpointing.interval: 2000
+        taskmanager.numberOfTaskSlots: 4
+
+  flink-taskmanager:
+    image: flink:1.18-scala_2.12-java11
+    hostname: flink-taskmanager
+    container_name: flink-taskmanager
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        state.backend: rocksdb
+        taskmanager.memory.process.size: 3584m
+
+  flink-sql-gateway:
+    image: flink:1.18-scala_2.12-java11
+    hostname: flink-sql-gateway
+    container_name: flink-sql-gateway
+    ports:
+      - "8083:8083"  # SQL Gateway REST API
+    depends_on:
+      - flink-jobmanager
+      - flink-taskmanager
+      - broker
+    command: >
+      bash -c "
+      echo 'Starting Flink SQL Gateway...' &&
+      /opt/flink/bin/sql-gateway.sh start-foreground
+      "
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        rest.address: flink-jobmanager
+        rest.port: 8081
+        sql-gateway.endpoint.rest.address: 0.0.0.0
+        sql-gateway.endpoint.rest.port: 8083

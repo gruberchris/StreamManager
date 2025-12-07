@@ -5,15 +5,8 @@ namespace StreamManager.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class TestController : ControllerBase
+public class TestController(IStreamQueryEngine engine) : ControllerBase
 {
-    private readonly AdHocKsqlService _ksqlService;
-
-    public TestController(AdHocKsqlService ksqlService)
-    {
-        _ksqlService = ksqlService;
-    }
-
     [HttpPost("query")]
     public async Task<ActionResult> TestQuery([FromBody] TestQueryRequest request)
     {
@@ -23,7 +16,7 @@ public class TestController : ControllerBase
         
         try
         {
-            await foreach (var result in _ksqlService.ExecuteQueryStreamAsync(request.Ksql, cts.Token))
+            await foreach (var result in engine.ExecuteAdHocQueryAsync(request.Query, properties: null, cts.Token))
             {
                 results.Add(result);
                 if (results.Count >= 10) break; // Limit results for testing
@@ -38,17 +31,17 @@ public class TestController : ControllerBase
             return Ok(new { count = results.Count, results = results, error = ex.GetType().Name, message = ex.Message });
         }
 
-        return Ok(new { count = results.Count, results = results, success = true });
+        return Ok(new { count = results.Count, results = results, success = true, engine = engine.EngineName });
     }
 
     [HttpPost("direct")]
     public async Task<ActionResult> TestDirect([FromBody] TestQueryRequest request)
     {
-        // Test direct ksqlDB connection
+        // Test direct engine connection (only works with ksqlDB currently)
         var httpClient = new HttpClient();
         var payload = new
         {
-            ksql = request.Ksql,
+            ksql = request.Query,
             streamsProperties = new Dictionary<string, object>
             {
                 { "ksql.streams.auto.offset.reset", "earliest" }
@@ -65,13 +58,13 @@ public class TestController : ControllerBase
             
             if (response.IsSuccessStatusCode)
             {
-                var content = await response.Content.ReadAsStringAsync();
+                var content = await response.Content.ReadAsStringAsync(cts.Token);
                 var lines = content.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).Take(10).ToList();
                 return Ok(new { success = true, lines = lines, fullContent = content.Length > 1000 ? content[..1000] + "..." : content });
             }
             else
             {
-                var error = await response.Content.ReadAsStringAsync();
+                var error = await response.Content.ReadAsStringAsync(cts.Token);
                 return Ok(new { success = false, status = response.StatusCode, error = error });
             }
         }
@@ -82,4 +75,4 @@ public class TestController : ControllerBase
     }
 }
 
-public record TestQueryRequest(string Ksql);
+public record TestQueryRequest(string Query);

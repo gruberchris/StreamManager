@@ -1,46 +1,8 @@
 version: '3.8'
 
+# ksqlDB-specific services
+# Run with: docker-compose -f docker-compose.base.yml -f docker-compose.ksqldb.yml up
 services:
-  broker:
-    image: confluentinc/cp-kafka:7.6.0
-    hostname: broker
-    container_name: broker
-    ports:
-      - "29092:29092"
-      - "9092:9092"
-      - "9101:9101"
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_JMX_PORT: 9101
-      KAFKA_JMX_HOSTNAME: localhost
-      # KRaft Specific Configuration
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      # Generates a random cluster ID for KRaft formatting
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
-
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.6.0
-    hostname: schema-registry
-    container_name: schema-registry
-    depends_on:
-      - broker
-    ports:
-      - "8081:8081"
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
-
   ksqldb-server:
     image: confluentinc/cp-ksqldb-server:7.6.0
     hostname: ksqldb-server
@@ -90,19 +52,7 @@ services:
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
       KSQL_KSQL_STREAM_AUTO_CREATE: 'true'
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: postgres-db
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: stream_manager_db # Updated Database Name
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  # Optional: Generates fake data so you have something to query immediately
+  # Optional: CLI for debugging
   ksqldb-cli:
     image: confluentinc/cp-ksqldb-cli:7.6.0
     container_name: ksqldb-cli
@@ -110,6 +60,3 @@ services:
       - ksqldb-server
     entrypoint: /bin/sh
     tty: true
-
-volumes:
-  pgdata:

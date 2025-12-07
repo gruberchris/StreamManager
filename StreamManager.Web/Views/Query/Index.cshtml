@@ -82,7 +82,7 @@
         // Initialize SignalR connection
         function initConnection() {
             connection = new signalR.HubConnectionBuilder()
-                .withUrl("https://localhost:7068/hub/ksql")
+                .withUrl("https://localhost:7068/hub/stream")
                 .build();
 
             connection.start()
