@@ -314,32 +314,26 @@ You should see JSON messages like:
 
 ## Example Stream Definitions
 
-**Now that you have data flowing, you can create stream definitions to process it.**
+**For a complete, step-by-step tutorial on running Ad-Hoc Queries and Managed Streams, please see:**
 
-All examples below assume:
-1. ✅ Kafka topic `orders` exists
-2. ✅ `generate_orders.sh` is running (or has generated data)
-3. ✅ For ksqlDB: STREAM definition exists
-4. ✅ For Flink: No pre-setup needed (CREATE TABLE is in the query)
+👉 **[ORDERS_EXAMPLE_WALKTHROUGH.md](ORDERS_EXAMPLE_WALKTHROUGH.md)**
 
-#### High-Value Orders (ksqlDB)
+The walkthrough covers:
+- Detailed SQL for both ksqlDB and Flink
+- How to run Ad-Hoc tests (Bounded)
+- How to deploy Managed Streams (Unbounded)
+- Understanding query behavior
 
+### Quick Teaser: High-Value Orders
+
+**ksqlDB:**
 ```sql
-SELECT 
-    ORDER_ID,
-    CUSTOMER_ID,
-    PRODUCT,
-    AMOUNT,
-    PURCHASE_DATE
-FROM orders 
-WHERE AMOUNT > 500
-EMIT CHANGES;
+SELECT * FROM orders WHERE AMOUNT > 500 EMIT CHANGES;
 ```
 
-#### High-Value Orders (Flink) - Complete Script
-
+**Flink:**
 ```sql
--- Define source table
+-- 1. Define Source
 CREATE TABLE orders (
     ORDER_ID INT,
     CUSTOMER_ID INT,
@@ -354,13 +348,10 @@ CREATE TABLE orders (
     'scan.startup.mode' = 'earliest-offset'
 );
 
--- Define sink table
+-- 2. Define Sink
 CREATE TABLE high_value_orders (
     ORDER_ID INT,
-    CUSTOMER_ID INT,
-    PRODUCT STRING,
-    AMOUNT DOUBLE,
-    PURCHASE_DATE STRING
+    AMOUNT DOUBLE
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'high_value_orders',
@@ -368,68 +359,9 @@ CREATE TABLE high_value_orders (
     'format' = 'json'
 );
 
--- Deploy continuous processing
-INSERT INTO high_value_orders
-SELECT 
-    ORDER_ID,
-    CUSTOMER_ID,
-    PRODUCT,
-    AMOUNT,
-    PURCHASE_DATE
-FROM orders 
-WHERE AMOUNT > 500;
-```
-
-#### Customer Order Summary (ksqlDB)
-
-```sql
-SELECT 
-    CUSTOMER_ID,
-    COUNT(*) AS ORDER_COUNT,
-    SUM(AMOUNT) AS TOTAL_SPENT,
-    AVG(AMOUNT) AS AVG_ORDER_VALUE
-FROM orders
-GROUP BY CUSTOMER_ID
-EMIT CHANGES;
-```
-
-#### Customer Order Summary (Flink)
-
-```sql
-SELECT 
-    CUSTOMER_ID,
-    COUNT(*) AS ORDER_COUNT,
-    SUM(AMOUNT) AS TOTAL_SPENT,
-    AVG(AMOUNT) AS AVG_ORDER_VALUE
-FROM orders
-GROUP BY CUSTOMER_ID;
-```
-
-#### Product Sales Analytics (ksqlDB)
-
-```sql
-SELECT 
-    PRODUCT,
-    COUNT(*) AS UNITS_SOLD,
-    SUM(AMOUNT) AS REVENUE,
-    AVG(AMOUNT) AS AVG_PRICE
-FROM orders
-WINDOW TUMBLING (SIZE 1 HOUR)
-GROUP BY PRODUCT
-EMIT CHANGES;
-```
-
-#### Product Sales Analytics (Flink)
-
-```sql
-SELECT 
-    PRODUCT,
-    COUNT(*) AS UNITS_SOLD,
-    SUM(AMOUNT) AS REVENUE,
-    AVG(AMOUNT) AS AVG_PRICE,
-    TUMBLE_START(TO_TIMESTAMP(PURCHASE_DATE), INTERVAL '1' HOUR) AS WINDOW_START
-FROM orders
-GROUP BY PRODUCT, TUMBLE(TO_TIMESTAMP(PURCHASE_DATE), INTERVAL '1' HOUR);
+-- 3. Deploy
+INSERT INTO high_value_orders 
+SELECT ORDER_ID, AMOUNT FROM orders WHERE AMOUNT > 500;
 ```
 
 ---
@@ -527,9 +459,10 @@ To switch from ksqlDB to Flink (or vice versa):
 
 ## Next Steps
 
-- See `docs/ENGINE_ABSTRACTION_PLAN.md` for architecture details
-- See `docs/FLINK_MIGRATION.md` for SQL syntax migration guide (coming soon)
-- See `docs/BEST_PRACTICES.md` for capacity planning
+- See `docs/ORDERS_EXAMPLE_WALKTHROUGH.md` for the complete tutorial
+- See `docs/FLINK_MIGRATION.md` for SQL syntax migration guide
+- See `docs/ARCHITECTURE.md` for architecture details
+- See `docs/OPERATIONS.md` for capacity planning and best practices
 
 ---
 

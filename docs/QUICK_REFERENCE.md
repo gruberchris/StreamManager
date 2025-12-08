@@ -203,10 +203,10 @@ curl https://localhost:7068/api/streams -k
 ## 📚 Documentation
 
 - **Quick Start:** `QUICK_START.md`
-- **Architecture:** `ENGINE_ABSTRACTION_PLAN.md`
-- **Flink Guide:** `PHASE4_IMPLEMENTATION.md`
+- **Tutorial:** `ORDERS_EXAMPLE_WALKTHROUGH.md`
+- **Architecture:** `ARCHITECTURE.md`
 - **SQL Migration:** `FLINK_MIGRATION.md`
-- **Full Summary:** `COMPLETE_IMPLEMENTATION_SUMMARY.md`
+- **Operations:** `OPERATIONS.md`
 
 ---
 
@@ -252,7 +252,7 @@ curl https://localhost:7068/api/streams -k
 
 ## 📞 Support
 
-**Issues?** Check documentation in `/docs` folder  
+**Issues?** Check `ORDERS_EXAMPLE_WALKTHROUGH.md` troubleshooting section  
 **Questions?** Review `QUICK_START.md`  
 **Bugs?** Check build status: `dotnet build`
 
