@@ -2,51 +2,38 @@
     ViewData["Title"] = "Dashboard";
 }
 
-<div class="row">
-    <div class="col-md-12">
-        <h1 class="display-4">Stream Manager</h1>
-        <p class="lead">Welcome to the ksqlDB Stream Management Platform</p>
-    </div>
+<div class="text-center">
+    <h1 class="display-4">Stream Manager</h1>
+    <p class="lead">Welcome to the Kafka Stream Management Platform</p>
 </div>
 
 <div class="row mt-4">
-    <div class="col-md-4">
-        <div class="card">
+    <div class="col-md-6">
+        <div class="card mb-4 shadow-sm">
             <div class="card-body">
-                <h5 class="card-title">Ad-Hoc Queries</h5>
-                <p class="card-text">Execute and stream real-time KSQL queries for rapid prototyping and debugging.</p>
-                <a asp-controller="Query" asp-action="Index" class="btn btn-primary">Open Query Tool</a>
+                <h5 class="card-title">Interactive Query Tool</h5>
+                <p class="card-text">Execute and stream real-time queries for rapid prototyping and debugging.</p>
+                <a href="@Url.Action("Index", "Query")" class="btn btn-primary">Go to Query Tool</a>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card">
+    <div class="col-md-6">
+        <div class="card mb-4 shadow-sm">
             <div class="card-body">
                 <h5 class="card-title">Stream Management</h5>
-                <p class="card-text">Create, deploy, and manage persistent ksqlDB streams and ETL jobs.</p>
-                <a asp-controller="Streams" asp-action="Index" class="btn btn-primary">Manage Streams</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Live Preview</h5>
-                <p class="card-text">Preview live data from your deployed streams in real-time.</p>
-                <a asp-controller="Streams" asp-action="Index" class="btn btn-secondary">View Streams</a>
+                <p class="card-text">Create, deploy, and manage persistent streams and ETL jobs.</p>
+                <a href="@Url.Action("Index", "Streams")" class="btn btn-success">Manage Streams</a>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-5">
-    <div class="col-md-12">
-        <h3>Getting Started</h3>
-        <ol>
-            <li>Use the <strong>Query Tool</strong> to prototype and test your KSQL queries</li>
-            <li>Create <strong>Persistent Streams</strong> from your working queries</li>
-            <li><strong>Deploy</strong> streams to start processing data</li>
-            <li>Monitor and <strong>Preview</strong> your stream outputs</li>
-        </ol>
-    </div>
+<div class="mt-4">
+    <h3>Quick Start Guide</h3>
+    <ul>
+        <li>Use the <strong>Query Tool</strong> to prototype and test your queries</li>
+        <li>Create <strong>Persistent Streams</strong> from your working queries</li>
+        <li><strong>Deploy</strong> streams to start processing data</li>
+        <li>Monitor and <strong>Preview</strong> your stream outputs</li>
+    </ul>
 </div>

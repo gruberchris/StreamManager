@@ -5,7 +5,7 @@
 <div class="row">
     <div class="col-md-12">
         <h2>Ad-Hoc Query Tool</h2>
-        <p>Execute real-time KSQL queries and see streaming results.</p>
+        <p>Execute real-time queries and see streaming results.</p>
     </div>
 </div>
 
@@ -17,7 +17,7 @@
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label for="queryInput" class="form-label">KSQL Query</label>
+                    <label for="queryInput" class="form-label">Stream Query</label>
                     <textarea id="queryInput" class="form-control" rows="6" placeholder="SELECT * FROM your_stream EMIT CHANGES;"></textarea>
                 </div>
                 <div class="mb-3">
@@ -121,7 +121,7 @@
 
             const query = editor.getValue().trim();
             if (!query) {
-                alert('Please enter a KSQL query');
+                alert('Please enter a query');
                 return;
             }
 
@@ -222,12 +222,12 @@
                 if (data.header) {
                     console.log('Found header data:', data.header);
                     
-                    // Initialize table headers - handle ksqlDB schema format
+                    // Initialize table headers - handle schema format
                     let columnInfo = [];
                     if (typeof data.header.schema === 'string') {
                         console.log('Full schema string:', data.header.schema);
                         
-                        // Parse ksqlDB schema: "`COL1` TYPE, `COL2` TYPE(params), ..."
+                        // Parse schema: "`COL1` TYPE, `COL2` TYPE(params), ..."
                         // More robust parsing - split by comma and backtick pattern
                         const parts = data.header.schema.split(/,\s*(?=`)/);
                         
@@ -295,7 +295,7 @@
                             if (columnName === 'ORDER_TIME' && columnType === 'BIGINT') {
                                 try {
                                     const timestamp = parseInt(col);
-                                    // ksqlDB timestamps are in milliseconds
+                                    // Timestamps are in milliseconds
                                     const date = new Date(timestamp);
                                     
                                     console.log(`Converting timestamp: ${timestamp} -> ${date.toLocaleString()}`);

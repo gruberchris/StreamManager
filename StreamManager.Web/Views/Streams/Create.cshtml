@@ -55,8 +55,8 @@
             <div class="card-body">
                 <ul class="small">
                     <li><strong>Stream Name:</strong> Use a descriptive name that indicates the purpose of your stream</li>
-                    <li><strong>KSQL Query:</strong> Write a SELECT statement that transforms or filters your source data</li>
-                    <li><strong>Testing:</strong> Use the Query Tool to test your KSQL before creating a persistent stream</li>
+                    <li><strong>Stream Query:</strong> Write a SELECT statement that transforms or filters your source data</li>
+                    <li><strong>Testing:</strong> Use the Query Tool to test your query before creating a persistent stream</li>
                     <li><strong>Deployment:</strong> After creation, you'll need to deploy the stream to start processing</li>
                 </ul>
             </div>
@@ -82,7 +82,7 @@
 
 @section Scripts {
     <script>
-        // Initialize CodeMirror for the KSQL editor
+        // Initialize CodeMirror for the SQL editor
         const editor = CodeMirror.fromTextArea(document.querySelector('textarea[name="SqlScript"]'), {
             mode: 'text/x-sql',
             theme: 'monokai',
