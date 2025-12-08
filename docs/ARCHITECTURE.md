@@ -63,7 +63,7 @@ The implementation uses the **Strategy Pattern** with dependency injection to pr
     },
     "Flink": {
       "JobManagerUrl": "http://flink-jobmanager:8088",
-      "KafkaBrokers": "kafka:9092"
+      "KafkaBrokers": "broker:29092"
     }
   }
 }
@@ -209,7 +209,7 @@ CREATE TABLE IF NOT EXISTS orders (
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'orders',
-    'properties.bootstrap.servers' = 'kafka:9092',
+    'properties.bootstrap.servers' = 'broker:29092',
     'properties.group.id' = 'streammanager-consumer',
     'scan.startup.mode' = 'earliest-offset',
     'format' = 'json'
@@ -356,7 +356,7 @@ public class StreamDefinition
 ### Request/Response Examples
 
 **Create Stream:**
-```json
+```
 POST /api/stream
 {
   "name": "high_value_orders",
@@ -374,7 +374,7 @@ Response:
 ```
 
 **Delete Stream:**
-```json
+```
 DELETE /api/stream/high_value_orders
 
 Response: 200 OK

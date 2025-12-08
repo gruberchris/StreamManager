@@ -27,7 +27,7 @@ internal record OperationStatusResponse(
     [property: JsonPropertyName("status")] string Status);
 
 internal record FetchResultsResponse(
-    [property: JsonPropertyName("results")] FetchResultsData Results,
+    [property: JsonPropertyName("results")] FetchResultsData? Results,
     [property: JsonPropertyName("resultType")] string ResultType,
     [property: JsonPropertyName("nextResultUri")] string? NextResultUri = null);
 

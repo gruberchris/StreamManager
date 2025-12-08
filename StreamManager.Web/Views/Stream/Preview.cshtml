@@ -102,12 +102,13 @@ else if (!Model.IsActive)
 @section Scripts {
     <script>
         console.log('=== PREVIEW PAGE LOADED ===');
-        console.log('Stream query from server:', '@Html.Raw(Model.SqlScript)');
+        // Use JSON serialization to safely embed the SQL string
+        const streamQuery = @Html.Raw(Json.Serialize(Model.SqlScript));
+        console.log('Stream query from server:', streamQuery);
         
         let connection = null;
         let isPreviewActive = false;
         let querySubscription = null;
-        const streamQuery = '@Html.Raw(Model.SqlScript)';
         let messageCount = 0;
         const maxMessages = 100;
 

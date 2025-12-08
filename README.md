@@ -190,6 +190,22 @@ The frontend MVC web application that provides:
 
 ---
 
+## 📚 Example Setup
+
+To run the examples in the documentation, see:
+
+**[Orders Example Setup Guide](docs/ORDERS_EXAMPLE_SETUP.md)**
+
+This guide walks you through:
+1. Creating the Kafka topic
+2. Setting up ksqlDB stream or Flink tables
+3. Generating sample data
+4. Running your first queries
+
+All documentation examples assume you've completed this setup.
+
+---
+
 ## Infrastructure Requirements
 
 ### Shared Services (Both Engines)

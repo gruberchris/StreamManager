@@ -7,7 +7,11 @@ services:
     container_name: flink-jobmanager
     ports:
       - "8088:8081"  # Flink Web UI and REST API
-    command: jobmanager
+    command: >
+      bash -c "
+      wget -P /opt/flink/lib/ https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.0.2-1.18/flink-sql-connector-kafka-3.0.2-1.18.jar &&
+      /docker-entrypoint.sh jobmanager
+      "
     environment:
       - |
         FLINK_PROPERTIES=
@@ -23,7 +27,11 @@ services:
     container_name: flink-taskmanager
     depends_on:
       - flink-jobmanager
-    command: taskmanager
+    command: >
+      bash -c "
+      wget -P /opt/flink/lib/ https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.0.2-1.18/flink-sql-connector-kafka-3.0.2-1.18.jar &&
+      /docker-entrypoint.sh taskmanager
+      "
     deploy:
       resources:
         limits:
@@ -49,10 +57,9 @@ services:
     depends_on:
       - flink-jobmanager
       - flink-taskmanager
-      - broker
     command: >
       bash -c "
-      echo 'Starting Flink SQL Gateway...' &&
+      wget -P /opt/flink/lib/ https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.0.2-1.18/flink-sql-connector-kafka-3.0.2-1.18.jar &&
       /opt/flink/bin/sql-gateway.sh start-foreground
       "
     environment:

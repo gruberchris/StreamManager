@@ -41,9 +41,10 @@ public class FlinkQueryValidator : IQueryValidator
         if (query.Length > _options.Query.MaxQueryLength)
             return ValidationResult.Fail($"Query exceeds maximum length of {_options.Query.MaxQueryLength} characters");
 
-        // 2. Must be a SELECT statement
-        if (!normalizedQuery.StartsWith("SELECT"))
-            return ValidationResult.Fail("Ad-hoc queries must be SELECT statements");
+        // 2. Must contain either SELECT or CREATE TABLE (for ad-hoc queries with table definitions)
+        // Ad-hoc queries can include CREATE TABLE statements followed by SELECT
+        if (!normalizedQuery.Contains("SELECT") && !normalizedQuery.StartsWith("CREATE TABLE"))
+            return ValidationResult.Fail("Ad-hoc queries must contain a SELECT statement or CREATE TABLE definition");
 
         // 3. Block dangerous operations
         foreach (var blocked in _options.Query.BlockedKeywords)
@@ -100,9 +101,9 @@ public class FlinkQueryValidator : IQueryValidator
         if (query.Length > _options.Query.MaxQueryLength)
             return ValidationResult.Fail($"Query exceeds maximum length of {_options.Query.MaxQueryLength} characters");
 
-        // 2. Must be a SELECT statement
-        if (!normalizedQuery.StartsWith("SELECT"))
-            return ValidationResult.Fail("Persistent queries must be SELECT statements");
+        // 2. Must contain INSERT INTO (required for persistent Flink jobs)
+        if (!normalizedQuery.Contains("INSERT INTO"))
+            return ValidationResult.Fail("Persistent queries must contain an INSERT INTO statement to create a running job.");
 
         // 3. Block dangerous operations
         foreach (var blocked in _options.Query.BlockedKeywords)
@@ -117,10 +118,7 @@ public class FlinkQueryValidator : IQueryValidator
             return ValidationResult.Fail("EMIT CHANGES is not valid Flink SQL syntax. Remove it from your query.");
         }
 
-        // 5. Flink persistent queries CAN have LIMIT (unlike ksqlDB)
-        // This is allowed in Flink for bounded queries
-
-        // 6. Check for expensive operations
+        // 5. Check for expensive operations
         var warnings = new List<string>();
         var joinCount = Regex.Matches(normalizedQuery, @"\bJOIN\b").Count;
         if (joinCount > _options.Query.MaxJoins)

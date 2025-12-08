@@ -14,6 +14,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{6404E212-F
 		docs\README.md = docs\README.md
 		docs\OPERATIONS.md = docs\OPERATIONS.md
 		docs\ARCHITECTURE.md = docs\ARCHITECTURE.md
+		docs\ORDERS_EXAMPLE_WALKTHROUGH.md = docs\ORDERS_EXAMPLE_WALKTHROUGH.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{9DFD86B1-2CA9-408F-92C1-455063B2D396}"

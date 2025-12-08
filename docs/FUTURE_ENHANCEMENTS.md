@@ -996,7 +996,7 @@ Single Kafka cluster configuration:
         "Region": "us-west-2"
       },
       "analytics": {
-        "BootstrapServers": "analytics-kafka:9092",
+        "BootstrapServers": "analytics-broker:29092",
         "SecurityProtocol": "PLAINTEXT",
         "Region": "us-east-1"
       }

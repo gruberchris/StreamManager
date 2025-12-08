@@ -4,6 +4,94 @@ All notable changes to Stream Manager will be documented in this file.
 
 ---
 
+## [1.0.1] - 2025-12-07
+
+### 🔧 Flink Engine Improvements - Correct Session-Scoped Architecture
+
+This release corrects the Flink engine implementation to properly support Flink's ephemeral table architecture where tables are session-scoped and users provide complete SQL scripts.
+
+---
+
+### Changed
+
+#### Flink Engine Implementation
+- ✅ **Ad-hoc queries now accept complete SQL scripts** - Users can include CREATE TABLE statements
+- ✅ **Managed streams now accept complete SQL scripts** - Full control with CREATE TABLE + INSERT INTO
+- ✅ **Tables are now correctly ephemeral** - Exist only during session, cleaned up automatically
+- ✅ **Removed flawed table registry approach** - No more RegisterTableDefinitionsAsync()
+
+#### Core Improvements
+- ✅ **ExecuteAdHocQueryAsync()** - Now parses and executes complete SQL scripts
+- ✅ **DeployPersistentQueryAsync()** - Now handles complete SQL scripts with INSERT INTO
+- ✅ **Added ParseSqlStatements()** - Intelligently splits SQL by semicolons, handles comments
+- ✅ **Added IsSelectQuery()** - Detects SELECT queries for result streaming
+- ✅ **Added ExtractOutputTopicFromScript()** - Extracts topic from CREATE TABLE statements
+
+### Removed
+
+- ❌ **RegisterTableDefinitionsAsync()** - Flawed approach that tried to persist ephemeral tables
+- ❌ **GenerateCreateTableStatement()** - No longer needed, users provide their own
+- ❌ **IServiceProvider dependency** - Cleaned up unused dependency
+
+### Documentation
+
+- ✅ Updated `QUICK_START.md` - Clarified Flink setup, removed misleading table registry instructions
+- ✅ Updated `FLINK_RETHINK_PLAN.md` - Complete 982-line implementation plan
+- ✅ Created `FLINK_IMPLEMENTATION_NOTES.md` - Detailed change summary with examples
+- ✅ Updated `scripts/generate_orders.sh` - Added clarifying comments about topics vs tables
+
+### Benefits
+
+- ✅ **Simpler Architecture** - No table registry to maintain
+- ✅ **Flink-Native** - Matches how Flink sessions actually work
+- ✅ **Flexible** - Users can test any schema on-the-fly
+- ✅ **Self-Documenting** - Table definitions are in the query itself
+- ✅ **Test-Then-Deploy** - Same script works for ad-hoc and managed streams
+
+### Backwards Compatibility
+
+- ✅ **ksqlDB Engine** - Zero changes, fully preserved
+- ✅ **API Interface** - IStreamQueryEngine unchanged
+- ✅ **Database Schema** - No migrations required
+
+### Examples
+
+**Ad-Hoc Query (Bounded Stream):**
+```sql
+CREATE TABLE orders (ORDER_ID INT, AMOUNT DOUBLE) 
+WITH ('connector' = 'kafka', 'topic' = 'orders', 
+      'properties.bootstrap.servers' = 'kafka:9092', 
+      'format' = 'json', 
+      'scan.bounded.mode' = 'latest-offset');
+
+SELECT * FROM orders WHERE AMOUNT > 500 LIMIT 10;
+```
+
+**Managed Stream (Unbounded Stream):**
+```sql
+CREATE TABLE orders (ORDER_ID INT, AMOUNT DOUBLE) 
+WITH ('connector' = 'kafka', 'topic' = 'orders', 
+      'properties.bootstrap.servers' = 'kafka:9092', 
+      'format' = 'json');
+
+CREATE TABLE high_value (ORDER_ID INT, AMOUNT DOUBLE) 
+WITH ('connector' = 'kafka', 'topic' = 'high_value', 
+      'properties.bootstrap.servers' = 'kafka:9092', 
+      'format' = 'json');
+
+INSERT INTO high_value SELECT * FROM orders WHERE AMOUNT > 500;
+```
+
+### Build Status
+
+```
+✅ dotnet build - Success (0 warnings, 0 errors)
+✅ All engines compile successfully
+✅ No breaking changes to API
+```
+
+---
+
 ## [1.0.0] - 2025-12-07
 
 ### 🎉 Major Release - Multi-Engine Support

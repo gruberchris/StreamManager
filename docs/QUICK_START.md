@@ -136,11 +136,36 @@ Access Flink Web UI: **http://localhost:8088**
 
 ---
 
-## Creating the Orders Stream for Development
+## Setting Up the Orders Example
 
-Before creating stream definitions, you need to create the base `orders` stream/table in your streaming engine. This is required for the sample order generator script and examples.
+This guide shows you how to set up the `orders` example that all documentation refers to. **Start from scratch - no pre-existing objects are assumed.**
 
-### For ksqlDB
+---
+
+### Step 1: Create the Kafka Topic
+
+**Both ksqlDB and Flink need the Kafka topic to exist first.** Create it:
+
+```bash
+# Create the 'orders' Kafka topic
+docker exec -it broker kafka-topics --create \
+  --topic orders \
+  --bootstrap-server localhost:9092 \
+  --partitions 3 \
+  --replication-factor 1
+
+# Verify it was created
+docker exec -it broker kafka-topics --list \
+  --bootstrap-server localhost:9092 | grep orders
+```
+
+Expected output: `orders`
+
+---
+
+### Step 2A: For ksqlDB - Create the Stream Definition
+
+**ksqlDB requires a STREAM definition to map to the Kafka topic.**
 
 Connect to ksqlDB CLI:
 ```bash
@@ -162,43 +187,72 @@ CREATE STREAM orders (
 );
 ```
 
+Verify it was created:
+```sql
+SHOW STREAMS;
+```
+
 Exit ksqlDB CLI:
 ```sql
 EXIT;
 ```
 
-### For Apache Flink
+---
 
-Create the orders table using the API. First, create a stream definition via the API:
+### Step 2B: For Flink - No Pre-Creation Needed!
 
-```bash
-curl -X POST http://localhost:7068/api/streams \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Base Orders Table",
-    "sqlScript": "CREATE TABLE orders (ORDER_ID INT, CUSTOMER_ID INT, PRODUCT STRING, AMOUNT DOUBLE, PURCHASE_DATE STRING) WITH ('\''connector'\'' = '\''kafka'\'', '\''topic'\'' = '\''orders'\'', '\''properties.bootstrap.servers'\'' = '\''localhost:9092'\'', '\''format'\'' = '\''json'\'', '\''scan.startup.mode'\'' = '\''earliest-offset'\'')"
-  }'
+**Flink does NOT require pre-creating table definitions in a central registry.** 
+
+You'll include `CREATE TABLE` statements directly in your queries. This gives you full flexibility to define schemas on-the-fly.
+
+**Ad-Hoc Query Example (Test & Explore):**
+```sql
+-- Define table with BOUNDED mode (stops reading after current data)
+CREATE TABLE orders (
+    ORDER_ID INT,
+    CUSTOMER_ID INT,
+    PRODUCT STRING,
+    AMOUNT DOUBLE,
+    PURCHASE_DATE STRING
+) WITH (
+    'connector' = 'kafka',
+    'topic' = 'orders',
+    'properties.bootstrap.servers' = 'broker:29092',
+    'format' = 'json',
+    'scan.startup.mode' = 'earliest-offset',
+    'scan.bounded.mode' = 'latest-offset'  -- Important for ad-hoc tests!
+);
+
+-- Run query
+SELECT * FROM orders WHERE AMOUNT > 500 LIMIT 10;
 ```
 
-Or use the Flink SQL Gateway directly:
+**Managed Stream Example (Continuous Processing):**
+```sql
+-- Define source (UNBOUNDED - continuous reading)
+CREATE TABLE orders (
+    ...
+) WITH (
+    'scan.startup.mode' = 'earliest-offset'
+    -- No bounded mode here!
+);
 
-```bash
-# Open a Flink SQL session
-SESSION_ID=$(curl -X POST http://localhost:8082/v1/sessions \
-  -H "Content-Type: application/json" \
-  -d '{"properties": {}}' | jq -r '.sessionHandle')
+-- Define sink
+CREATE TABLE high_value_orders (
+    ...
+);
 
-# Create the orders table
-curl -X POST http://localhost:8082/v1/sessions/$SESSION_ID/statements \
-  -H "Content-Type: application/json" \
-  -d '{
-    "statement": "CREATE TABLE IF NOT EXISTS orders (ORDER_ID INT, CUSTOMER_ID INT, PRODUCT STRING, AMOUNT DOUBLE, PURCHASE_DATE STRING) WITH ('\''connector'\'' = '\''kafka'\'', '\''topic'\'' = '\''orders'\'', '\''properties.bootstrap.servers'\'' = '\''kafka:9092'\'', '\''format'\'' = '\''json'\'', '\''scan.startup.mode'\'' = '\''earliest-offset'\'')"
-  }'
+-- Deploy
+INSERT INTO high_value_orders SELECT ... FROM orders ...;
 ```
 
-### Generate Sample Orders
+**You'll use this pattern in the Stream Manager UI.** No need to execute it now.
 
-Once the orders stream/table is created, use the provided script to generate sample data:
+---
+
+### Step 3: Generate Sample Data
+
+Now that the Kafka topic exists (and ksqlDB stream if using ksqlDB), generate sample order data:
 
 ```bash
 cd scripts
@@ -206,27 +260,67 @@ chmod +x generate_orders.sh
 ./generate_orders.sh
 ```
 
-The script will continuously insert orders every 30 seconds with:
-- **ORDER_ID**: Sequential starting at 1011
-- **CUSTOMER_ID**: Random between 500-599
-- **PRODUCT**: Random from 20 product names (Laptop, Mouse, Keyboard, etc.)
-- **AMOUNT**: Random between $10-$1500
-- **PURCHASE_DATE**: Current timestamp in ISO 8601 format
+**What the script does:**
+- Detects if you're running ksqlDB or Flink
+- Inserts orders into the Kafka topic using the streaming engine
+- Generates 1 order every 5 seconds
+
+**Data Schema:**
+- **ORDER_ID**: INT - Sequential starting at 1011 (1011, 1012, 1013, ...)
+- **CUSTOMER_ID**: INT - Random between 500-599
+- **PRODUCT**: STRING - Random from 20 products (Laptop, Wireless Mouse, Keyboard, etc.)
+- **AMOUNT**: DOUBLE - Random between 10.00 - 1500.00
+- **PURCHASE_DATE**: STRING - ISO 8601 format (e.g., "2025-12-07T20:30:15")
 
 **Example Output:**
 ```
-[2025-12-07T01:45:32] Inserting Order #1011: Laptop - $899.99 for Customer 542
-  ✓ Successfully inserted
+✓ Detected Flink SQL Gateway running on port 8083
 
-[2025-12-07T01:46:02] Inserting Order #1012: Wireless Mouse - $29.99 for Customer 513
+Starting order generator - creating 1 order every 5 seconds
+Engine: flink
+Press Ctrl+C to stop
+
+[2025-12-07T20:30:15] Inserting Order #1011: Laptop - $899.99 for Customer 542
+  ✓ Successfully inserted (Flink)
+
+[2025-12-07T20:30:20] Inserting Order #1012: Wireless Mouse - $29.99 for Customer 513
   ✓ Successfully inserted
 ```
 
 Press `Ctrl+C` to stop the generator.
 
-### Example Stream Definitions
+---
 
-Once the base `orders` stream/table exists, you can create stream definitions to process the data:
+### Step 4: Verify Data is Flowing
+
+Check that orders are being written to Kafka:
+
+```bash
+# View messages in the orders topic (Ctrl+C to exit)
+docker exec -it broker kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic orders \
+  --from-beginning \
+  --max-messages 5
+```
+
+You should see JSON messages like:
+```json
+{"ORDER_ID":1011,"CUSTOMER_ID":542,"PRODUCT":"Laptop","AMOUNT":899.99,"PURCHASE_DATE":"2025-12-07T20:30:15"}
+{"ORDER_ID":1012,"CUSTOMER_ID":513,"PRODUCT":"Wireless Mouse","AMOUNT":29.99,"PURCHASE_DATE":"2025-12-07T20:30:20"}
+```
+
+---
+
+## Example Stream Definitions
+
+**Now that you have data flowing, you can create stream definitions to process it.**
+
+All examples below assume:
+1. ✅ Kafka topic `orders` exists
+2. ✅ `generate_orders.sh` is running (or has generated data)
+3. ✅ For ksqlDB: STREAM definition exists
+4. ✅ For Flink: No pre-setup needed (CREATE TABLE is in the query)
 
 #### High-Value Orders (ksqlDB)
 
@@ -242,9 +336,40 @@ WHERE AMOUNT > 500
 EMIT CHANGES;
 ```
 
-#### High-Value Orders (Flink)
+#### High-Value Orders (Flink) - Complete Script
 
 ```sql
+-- Define source table
+CREATE TABLE orders (
+    ORDER_ID INT,
+    CUSTOMER_ID INT,
+    PRODUCT STRING,
+    AMOUNT DOUBLE,
+    PURCHASE_DATE STRING
+) WITH (
+    'connector' = 'kafka',
+    'topic' = 'orders',
+    'properties.bootstrap.servers' = 'broker:29092',
+    'format' = 'json',
+    'scan.startup.mode' = 'earliest-offset'
+);
+
+-- Define sink table
+CREATE TABLE high_value_orders (
+    ORDER_ID INT,
+    CUSTOMER_ID INT,
+    PRODUCT STRING,
+    AMOUNT DOUBLE,
+    PURCHASE_DATE STRING
+) WITH (
+    'connector' = 'kafka',
+    'topic' = 'high_value_orders',
+    'properties.bootstrap.servers' = 'broker:29092',
+    'format' = 'json'
+);
+
+-- Deploy continuous processing
+INSERT INTO high_value_orders
 SELECT 
     ORDER_ID,
     CUSTOMER_ID,

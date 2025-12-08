@@ -20,26 +20,16 @@ This guide helps you write stream processing queries for Apache Flink SQL when m
 
 ## Overview
 
-### What Stream Manager Does Automatically
+### Key Difference: Explicit Table Definitions
 
-When you configure Stream Manager to use Flink, it automatically:
-1. **Creates Kafka connector tables** for source topics
-2. **Wraps your SELECT query** in `INSERT INTO` statement
-3. **Creates output table** with Kafka connector configuration
-4. **Manages job lifecycle** (start/stop via Flink JobManager)
+In ksqlDB, you define a stream once and it persists in the ksqlDB server.
 
-### What You Need to Provide
+In Flink (with Stream Manager), **you provide the complete SQL script** for every operation. This script includes:
+1. **Source Table Definitions** (`CREATE TABLE ... WITH ...`)
+2. **Sink Table Definitions** (for managed streams)
+3. **Transformation Logic** (`SELECT` or `INSERT INTO`)
 
-You only provide the **SELECT statement** (the transformation logic):
-
-```sql
-SELECT customer_id, SUM(amount) as total
-FROM orders
-WHERE amount > 100
-GROUP BY customer_id
-```
-
-Stream Manager handles the rest!
+This gives you full control over the schema and connector properties for each query.
 
 ---
 
@@ -77,47 +67,71 @@ SELECT * FROM orders WHERE amount > 100;
 
 ## Stream Creation
 
-### How Stream Manager Wraps Your Query
+### New Pattern: Complete SQL Scripts
 
-#### **What You Write:**
+Instead of just writing the SELECT statement, you now write the **full SQL script**.
+
+#### **ksqlDB Approach:**
 ```sql
-SELECT * FROM orders WHERE amount > 1000
+-- One-time setup
+CREATE STREAM orders (...) WITH (...);
+
+-- Query
+SELECT * FROM orders WHERE amount > 1000 EMIT CHANGES;
 ```
 
-#### **What Stream Manager Does:**
+#### **Flink Approach (Stream Manager):**
 
-**For ksqlDB:**
+**For Ad-Hoc Queries (Testing):**
 ```sql
-CREATE STREAM high_value_orders AS
-SELECT * FROM orders WHERE amount > 1000
-EMIT CHANGES;
-```
-
-**For Flink:**
-```sql
--- Step 1: Create source table (automatic)
-CREATE TABLE IF NOT EXISTS orders (
+-- Define table inline (ephemeral)
+CREATE TABLE orders (
     order_id STRING,
-    customer_id STRING,
-    product_name STRING,
-    amount DECIMAL(10, 2),
-    order_time TIMESTAMP(3),
-    WATERMARK FOR order_time AS order_time - INTERVAL '5' SECOND
+    amount DECIMAL(10, 2)
 ) WITH (
     'connector' = 'kafka',
     'topic' = 'orders',
-    'properties.bootstrap.servers' = 'kafka:9092',
+    'properties.bootstrap.servers' = 'broker:29092',
+    'format' = 'json',
     'scan.startup.mode' = 'earliest-offset',
+    'scan.bounded.mode' = 'latest-offset'  -- Bounded for testing
+);
+
+-- Run query
+SELECT * FROM orders WHERE amount > 1000 LIMIT 10;
+```
+
+**For Managed Streams (Production):**
+```sql
+-- Define source (unbounded)
+CREATE TABLE orders (
+    order_id STRING,
+    amount DECIMAL(10, 2)
+) WITH (
+    'connector' = 'kafka',
+    'topic' = 'orders',
+    'properties.bootstrap.servers' = 'broker:29092',
+    'format' = 'json',
+    'scan.startup.mode' = 'earliest-offset'
+);
+
+-- Define sink
+CREATE TABLE high_value_orders (
+    order_id STRING,
+    amount DECIMAL(10, 2)
+) WITH (
+    'connector' = 'kafka',
+    'topic' = 'high_value_orders',
+    'properties.bootstrap.servers' = 'broker:29092',
     'format' = 'json'
 );
 
--- Step 2: Create output table with your query
-CREATE TABLE high_value_orders 
-WITH ('connector' = 'kafka', 'topic' = 'high_value_orders')
-AS SELECT * FROM orders WHERE amount > 1000;
+-- Deploy
+INSERT INTO high_value_orders
+SELECT * FROM orders WHERE amount > 1000;
 ```
 
-**Key Insight:** You don't write the CREATE TABLE statements yourself—Stream Manager generates them!
+**Key Insight:** You explicitly define your inputs and outputs in every script.
 
 ---
 
@@ -366,6 +380,10 @@ EMIT CHANGES;
 
 **Flink Migration:**
 ```sql
+-- Define table
+CREATE TABLE orders (...) WITH (...);
+
+-- Query
 SELECT 
   order_id,
   customer_id,
@@ -374,8 +392,6 @@ SELECT
 FROM orders
 WHERE amount > 500;
 ```
-
-**Changes:** Removed `EMIT CHANGES`
 
 ---
 
@@ -395,6 +411,16 @@ EMIT CHANGES;
 
 **Flink Migration:**
 ```sql
+-- Define table with Watermark (required for windows)
+CREATE TABLE orders (
+  order_id INT,
+  customer_id INT,
+  amount DOUBLE,
+  order_time TIMESTAMP(3),
+  WATERMARK FOR order_time AS order_time - INTERVAL '5' SECOND
+) WITH (...);
+
+-- Query
 SELECT 
   customer_id,
   COUNT(*) as order_count,
@@ -407,168 +433,22 @@ GROUP BY
 ```
 
 **Changes:**
-1. Removed `EMIT CHANGES`
-2. Removed `WINDOW TUMBLING (SIZE 1 HOUR)`
-3. Added `TUMBLE(order_time, INTERVAL '1' HOUR)` to GROUP BY
-4. Added time column grouping
-5. Added `TUMBLE_START()` to track window boundaries
-
----
-
-### Example 3: Join with Enrichment
-
-**ksqlDB Query:**
-```sql
-SELECT 
-  o.order_id,
-  o.amount,
-  o.product_name,
-  c.customer_name,
-  c.tier
-FROM orders o
-LEFT JOIN customers c ON o.customer_id = c.id
-WHERE o.amount > 100
-EMIT CHANGES;
-```
-
-**Flink Migration:**
-```sql
-SELECT 
-  o.order_id,
-  o.amount,
-  o.product_name,
-  c.customer_name,
-  c.tier
-FROM orders o
-LEFT JOIN customers c ON o.customer_id = c.id
-WHERE o.amount > 100;
-```
-
-**Changes:** Removed `EMIT CHANGES` (join syntax identical)
-
----
-
-### Example 4: Complex Multi-Step
-
-**ksqlDB Query:**
-```sql
-SELECT 
-  product_name,
-  COUNT(*) as sales_count,
-  AVG(amount) as avg_price
-FROM orders
-WHERE order_time > UNIX_TIMESTAMP() - 86400000
-WINDOW TUMBLING (SIZE 10 MINUTES)
-GROUP BY product_name
-HAVING COUNT(*) > 5
-EMIT CHANGES;
-```
-
-**Flink Migration:**
-```sql
-SELECT 
-  product_name,
-  COUNT(*) as sales_count,
-  AVG(amount) as avg_price,
-  TUMBLE_START(order_time, INTERVAL '10' MINUTE) as window_start
-FROM orders
-WHERE order_time > CURRENT_TIMESTAMP - INTERVAL '1' DAY
-GROUP BY 
-  product_name,
-  TUMBLE(order_time, INTERVAL '10' MINUTE)
-HAVING COUNT(*) > 5;
-```
-
-**Changes:**
-1. Removed `EMIT CHANGES`
-2. Changed `UNIX_TIMESTAMP() - 86400000` to `CURRENT_TIMESTAMP - INTERVAL '1' DAY`
-3. Replaced `WINDOW TUMBLING` with `TUMBLE()` in GROUP BY
-4. Added window function to SELECT
+1. Added WATERMARK definition to table
+2. Removed `WINDOW TUMBLING`
+3. Added `TUMBLE(...)` to GROUP BY
 
 ---
 
 ## Testing Queries
 
-### Using Stream Manager UI
-
-1. **Create Stream** → Enter your query
-2. **Validator checks syntax** automatically
-3. **Deploy** to Flink cluster
-4. **Preview** to see results in real-time
-
-### Using Flink SQL Client (Direct)
-
-```bash
-# Connect to Flink SQL Gateway
-docker exec -it flink-jobmanager /opt/flink/bin/sql-client.sh
-
-# Test your query
-Flink SQL> SELECT * FROM orders WHERE amount > 100;
-```
-
 ### Validation Checklist
 
+✅ **Include `CREATE TABLE` for all sources**  
 ✅ **Remove all `EMIT CHANGES` keywords**  
 ✅ **Replace window clauses** with Flink window functions  
 ✅ **Update time functions** (UNIX_TIMESTAMP → CURRENT_TIMESTAMP)  
 ✅ **Check data types** (VARCHAR → STRING, add precision to TIMESTAMP)  
-✅ **Test with small dataset** first  
-✅ **Verify output topic** receives data  
-
----
-
-## Common Pitfalls
-
-### ❌ Pitfall 1: Forgetting to Remove EMIT CHANGES
-
-```sql
--- WRONG (will fail validation)
-SELECT * FROM orders EMIT CHANGES;
-
--- CORRECT
-SELECT * FROM orders;
-```
-
-### ❌ Pitfall 2: Using ksqlDB Window Syntax
-
-```sql
--- WRONG
-SELECT customer_id, COUNT(*)
-FROM orders
-WINDOW TUMBLING (SIZE 5 MINUTES)
-GROUP BY customer_id;
-
--- CORRECT
-SELECT customer_id, COUNT(*)
-FROM orders
-GROUP BY customer_id, TUMBLE(order_time, INTERVAL '5' MINUTE);
-```
-
-### ❌ Pitfall 3: Missing Time Column in GROUP BY
-
-```sql
--- WRONG (will fail)
-SELECT customer_id, COUNT(*)
-FROM orders
-GROUP BY customer_id, TUMBLE(order_time, INTERVAL '5' MINUTE);
-
--- CORRECT (time column must be in GROUP BY)
-SELECT customer_id, COUNT(*)
-FROM orders
-GROUP BY customer_id, TUMBLE(order_time, INTERVAL '5' MINUTE);
-```
-
-Actually, the above is correct! The window function itself handles the grouping.
-
-### ❌ Pitfall 4: Using ksqlDB Time Functions
-
-```sql
--- WRONG
-SELECT UNIX_TIMESTAMP() as now FROM orders;
-
--- CORRECT
-SELECT CURRENT_TIMESTAMP as now FROM orders;
-```
+✅ **Use bounded mode** (`'scan.bounded.mode' = 'latest-offset'`) for testing  
 
 ---
 
@@ -576,28 +456,19 @@ SELECT CURRENT_TIMESTAMP as now FROM orders;
 
 ### Quick Migration Checklist
 
+- [ ] Create full SQL script with `CREATE TABLE` statements
 - [ ] Remove all `EMIT CHANGES`
 - [ ] Replace `WINDOW X` with window functions in GROUP BY
 - [ ] Update time functions (UNIX_TIMESTAMP → CURRENT_TIMESTAMP)
-- [ ] Change VARCHAR → STRING
-- [ ] Add precision to TIMESTAMP types
-- [ ] Test query in Flink SQL Client first
-- [ ] Deploy via Stream Manager
+- [ ] Test query in "Ad-Hoc" mode first
+- [ ] Deploy via "Create Stream" (using `INSERT INTO`)
 
 ### Key Advantages of Flink
 
 ✅ **Better window support** — More flexible time semantics  
 ✅ **Standard SQL** — Closer to ANSI SQL  
 ✅ **Time-bounded joins** — Better memory management  
-✅ **Complex event processing** — MATCH_RECOGNIZE for patterns  
-✅ **Batch + streaming** — Unified API  
-
-### Getting Help
-
-- **Flink SQL Docs:** https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/sql/
-- **Query Validator:** Built into Stream Manager
-- **Flink SQL Client:** Test queries directly
-- **Stream Manager Logs:** Check for deployment errors
+✅ **Full Schema Control** — Define connectors exactly how you want
 
 ---
 

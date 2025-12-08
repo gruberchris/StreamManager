@@ -138,10 +138,10 @@ public class TopicProxyService(
             {
                 try
                 {
-                    // ksqlDB creates topics in uppercase, but our stored name might be lowercase
-        var actualTopicName = topicName.ToUpperInvariant();
-        logger.LogInformation("Subscribing to topic {TopicName} (actual: {ActualTopicName})", topicName, actualTopicName);
-        consumer.Subscribe(actualTopicName);
+                    // Use the exact topic name from the database/engine
+                    // Flink is case-sensitive and we should respect the configured topic name
+                    logger.LogInformation("Subscribing to topic {TopicName}", topicName);
+                    consumer.Subscribe(topicName);
 
                     while (!cancellationToken.IsCancellationRequested)
                     {
@@ -189,7 +189,7 @@ public class TopicProxyService(
                     }
                     
                     await Task.Delay(5000, cancellationToken);
-                    continue;
+                    // continue; // Redundant jump
                 }
             }
         }
@@ -244,7 +244,10 @@ public class TopicProxyService(
             {
                 cts.Cancel();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Error cancelling consumer token during shutdown");
+            }
         }
         
         // Step 2: Wait for consumption loops to exit (Consume() can block up to 1 second)
